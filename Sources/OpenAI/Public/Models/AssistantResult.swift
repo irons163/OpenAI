@@ -41,10 +41,22 @@ public struct ToolResources: Codable, Equatable {
 }
 
 public struct FileSearchResources: Codable, Equatable {
-    public let vectorStoreIds: [String]
-    
+    public let vectorStoreIds: [String]?
+    public let vectorStores: [VectorStoreQuery]?
+
+    public init(vectorStoreIds: [String]) {
+        self.vectorStoreIds = vectorStoreIds
+        self.vectorStores = nil
+    }
+
+    public init(vectorStores: [VectorStoreQuery]) {
+        self.vectorStores = vectorStores
+        self.vectorStoreIds = nil
+    }
+
     enum CodingKeys: String, CodingKey {
         case vectorStoreIds = "vector_store_ids"
+        case vectorStores = "vector_stores"
     }
 }
 

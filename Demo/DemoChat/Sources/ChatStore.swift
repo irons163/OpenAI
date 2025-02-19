@@ -19,7 +19,7 @@ public final class ChatStore: ObservableObject {
     @Published var selectedConversationID: Conversation.ID?
 
     // Used for assistants API state.
-    private var timer: Timer?
+    private var timers: [String: Timer] = [:]
     private var timeInterval: TimeInterval = 1.0
     private var currentRunId: String?
     private var currentThreadId: String?
@@ -46,6 +46,10 @@ public final class ChatStore: ObservableObject {
     ) {
         self.openAIClient = openAIClient
         self.idProvider = idProvider
+    }
+
+    deinit {
+        print("deinit")
     }
 
     // MARK: - Events
@@ -192,11 +196,17 @@ public final class ChatStore: ObservableObject {
                         }
                     }
                     var messageText = choice.delta.content ?? ""
+                    var fileIDs: [String]?
                     if let finishReason = choice.finishReason,
                        finishReason == .toolCalls
                     {
                         functionCalls.forEach { (name: String, argument: String?) in
                             messageText += "Function call: name=\(name) arguments=\(argument ?? "")\n"
+                            if let jsonData = argument?.data(using: .utf8) {
+                                let request = try? JSONDecoder().decode(FileSearchFunctionCall.self, from: jsonData)
+                                fileIDs = request?.fileIDs
+                                print(request?.fileIDs)  // Output: ["Y12345", "Y67890"]
+                            }
                         }
                     }
                     let message = Message(
@@ -218,6 +228,19 @@ public final class ChatStore: ObservableObject {
                     } else {
                         conversations[conversationIndex].messages.append(message)
                     }
+
+                    if let fileIDs {
+                        for fileID in fileIDs {
+                            let file = try await openAIClient.file(fileId: fileID)
+                            let message = Message(
+                                id: partialChatResult.id,
+                                role: choice.delta.role ?? .assistant,
+                                content: file.filename ?? "empty",
+                                createdAt: Date(timeIntervalSince1970: TimeInterval(partialChatResult.created))
+                            )
+                            conversations[conversationIndex].messages.append(message)
+                        }
+                    }
                 }
             }
         } catch {
@@ -231,34 +254,40 @@ public final class ChatStore: ObservableObject {
         currentThreadId = threadId
         currentConversationId = conversationId
         isSendingMessage = true
-        timer = Timer.scheduledTimer(withTimeInterval: timeInterval, repeats: true) { [weak self] _ in
-            DispatchQueue.main.async {
-                self?.timerFired()
+        DispatchQueue.main.async {
+            let timer = Timer.scheduledTimer(withTimeInterval: self.timeInterval, repeats: true) { [weak self] _ in
+                self?.timerFired(conversationId: conversationId, runId: runId, threadId: threadId)
             }
+            self.timers[conversationId+runId+threadId] = timer
         }
     }
 
-    func stopPolling() {
+    func stopPolling(conversationId: Conversation.ID, runId: String, threadId: String) {
         isSendingMessage = false
+        let timer = timers[conversationId+runId+threadId]
         timer?.invalidate()
-        timer = nil
+        timers[conversationId+runId+threadId] = nil
     }
 
-    private func timerFired() {
+    private func timerFired(conversationId: Conversation.ID, runId: String, threadId: String) {
         Task {
-            let result = try await openAIClient.runRetrieve(threadId: currentThreadId ?? "", runId: currentRunId ?? "")
+            let result = try await openAIClient.runRetrieve(threadId: threadId, runId: runId)
 
             // TESTING RETRIEVAL OF RUN STEPS
-            try await handleRunRetrieveSteps()
+            let assistantId = try await handleRunRetrieveSteps()
+            if let assistantId {
+//                handleCompleted()
+                try await forceHandleAction(assistantId: assistantId, conversationId: conversationId, threadId: threadId)
+            }
 
             switch result.status {
                 // Get threadsMesages.
             case .completed:
-                handleCompleted()
+                handleCompleted(conversationId: conversationId, runId: runId, threadId: threadId)
             case .failed:
                 // Handle more gracefully with a popup dialog or failure indicator
                 await MainActor.run {
-                    self.stopPolling()
+                    self.stopPolling(conversationId: conversationId, runId: runId, threadId: threadId)
                 }
             case .requiresAction:
                 try await handleRequiresAction(result)
@@ -272,13 +301,13 @@ public final class ChatStore: ObservableObject {
     // END Polling section
     
     // This function is called when a thread is marked "completed" by the run status API.
-    private func handleCompleted() {
+    private func handleCompleted(conversationId: Conversation.ID, runId: String, threadId: String) {
         guard let conversationIndex = conversations.firstIndex(where: { $0.id == currentConversationId }) else {
             return
         }
         Task {
             await MainActor.run {
-                self.stopPolling()
+                self.stopPolling(conversationId: conversationId, runId: runId, threadId: threadId)
             }
             // Once a thread is marked "completed" by the status API, we can retrieve the threads messages, including a pagins cursor representing the last message we received.
             var before: String?
@@ -327,7 +356,7 @@ public final class ChatStore: ObservableObject {
         var toolOutputs = [RunToolOutputsQuery.ToolOutput]()
 
         for toolCall in toolCalls {
-            let msgContent = "function\nname: \(toolCall.function.name ?? "")\nargs: \(toolCall.function.arguments ?? "{}")"
+            let msgContent = "RequiresAction\nfunction\nname: \(toolCall.function.name ?? "")\nargs: \(toolCall.function.arguments ?? "{}")"
 
             let runStepMessage = Message(
                 id: toolCall.id,
@@ -345,9 +374,83 @@ public final class ChatStore: ObservableObject {
         let query = RunToolOutputsQuery(toolOutputs: toolOutputs)
         _ = try await openAIClient.runSubmitToolOutputs(threadId: currentThreadId, runId: currentRunId, query: query)
     }
-    
+
+    private func forceHandleAction(assistantId: String, conversationId: Conversation.ID, threadId: String) async throws {
+        guard let currentThreadId else {
+            return
+        }
+
+        let weatherFunction = ChatQuery.ChatCompletionToolParam(function: .init(
+            name: "find_files",
+            description: "Find uploaded files that match the given criteria, sorted by relevance.",
+            parameters: .init(
+                type: .object,
+                properties: [
+                    "file_ids": .init(
+                        type: .array,
+                        items: .init(type: .string)
+                    )
+                ],
+                required: ["file_ids"]
+            )
+        ))
+
+        let functions = [weatherFunction]
+
+        let runsQuery = RunsQuery(assistantId: assistantId,
+                                  tools: functions,
+                                  toolChoice: ChatQuery.ChatCompletionFunctionCallOptionParam(function: "find_files"))
+        let runsResult = try await openAIClient.runs(threadId: currentThreadId, query: runsQuery)
+        print(runsResult)
+        let runId = runsResult.id
+
+        startPolling(conversationId: conversationId, runId: runId, threadId: threadId)
+
+        guard let tools = runsResult.tools else {
+            return
+        }
+
+//        var toolOutputs = [RunToolOutputsQuery.ToolOutput]()
+
+        for tool in tools {
+            let msgContent = "function\nname: \(tool.function?.name ?? "")\nparameters: \(tool.function?.parameters)"
+            let runStepMessage = Message(
+                id: runsResult.id,
+                role: .assistant,
+                content: msgContent,
+                createdAt: Date(),
+                isRunStep: true
+            )
+
+            await addOrUpdateRunStepMessage(runStepMessage)
+
+            // Just return a generic "Done" output for now
+//            toolOutputs.append(.init(toolCallId: toolCall.id, output: "Done"))
+        }
+
+        switch runsResult.status {
+            // Get threadsMesages.
+        case .completed:
+            handleCompleted(conversationId: conversationId, runId: runId, threadId: threadId)
+        case .failed:
+            // Handle more gracefully with a popup dialog or failure indicator
+            await MainActor.run {
+                self.stopPolling(conversationId: conversationId, runId: runId, threadId: threadId)
+            }
+        case .requiresAction:
+            try await handleRequiresAction(runsResult)
+        default:
+            // Handle additional statuses "requires_action", "queued" ?, "expired", "cancelled"
+            // https://platform.openai.com/docs/assistants/how-it-works/runs-and-run-steps
+            break
+        }
+
+//        let query = RunToolOutputsQuery(toolOutputs: toolOutputs)
+//        _ = try await openAIClient.runSubmitToolOutputs(threadId: currentThreadId, runId: currentRunId, query: query)
+    }
+
     // The run retrieval steps are fetched in a separate task. This request is fetched, checking for new run steps, each time the run is fetched.
-    private func handleRunRetrieveSteps() async throws {
+    private func handleRunRetrieveSteps() async throws -> String? {
         var before: String?
 //            if let lastRunStepMessage = self.conversations[conversationIndex].messages.last(where: { $0.isRunStep == true }) {
 //                before = lastRunStepMessage.id
@@ -355,6 +458,7 @@ public final class ChatStore: ObservableObject {
 
         let stepsResult = try await openAIClient.runRetrieveSteps(threadId: currentThreadId ?? "", runId: currentRunId ?? "", before: before)
 
+        var assistantId: String?
         for item in stepsResult.data.reversed() {
             let toolCalls = item.stepDetails.toolCalls?.reversed() ?? []
 
@@ -365,13 +469,14 @@ public final class ChatStore: ObservableObject {
                 switch step.type {
                 case .fileSearch:
                     msgContent = "RUN STEP: \(step.type)"
+                    assistantId = item.assistantId
 
                 case .codeInterpreter:
                     let code = step.codeInterpreter
                     msgContent = "code_interpreter\ninput:\n\(code?.input ?? "")\noutputs: \(code?.outputs?.first?.logs ?? "")"
 
                 case .function:
-                    msgContent = "function\nname: \(step.function?.name ?? "")\nargs: \(step.function?.arguments ?? "{}")"
+                    msgContent = "get function\nname: \(step.function?.name ?? "")\nargs: \(step.function?.arguments ?? "{}")"
 
                 }
                 let runStepMessage = Message(
@@ -381,9 +486,40 @@ public final class ChatStore: ObservableObject {
                     createdAt: Date(),
                     isRunStep: true
                 )
-                await addOrUpdateRunStepMessage(runStepMessage)
+
+                if let jsonData = step.function?.arguments.data(using: .utf8) {
+                    let request = try? JSONDecoder().decode(FileSearchFunctionCall.self, from: jsonData)
+
+                    if let fileIDs = request?.fileIDs {
+                        print(fileIDs)
+
+                        for fileID in fileIDs {
+                            do {
+                                var fileID = fileID
+                                if fileID.hasPrefix("file-") == false {
+                                    fileID = "file-" + fileID
+                                }
+                                let file = try await openAIClient.file(fileId: fileID)
+                                let message = Message(
+                                    id: file.id,
+                                    role: .assistant,
+                                    content: file.filename ?? "empty",
+                                    createdAt: Date(),
+                                    isRunStep: true
+                                )
+                                await addOrUpdateRunStepMessage(message)
+                            } catch {
+                                continue
+                            }
+                        }
+                    }
+                } else {
+                    await addOrUpdateRunStepMessage(runStepMessage)
+                }
             }
         }
+
+        return assistantId
     }
     
     @MainActor
@@ -398,5 +534,13 @@ public final class ChatStore: ObservableObject {
         else {
             conversations[conversationIndex].messages.append(message)
         }
+    }
+}
+
+struct FileSearchFunctionCall: Codable {
+    let fileIDs: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case fileIDs = "file_ids"
     }
 }

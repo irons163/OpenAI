@@ -30,7 +30,13 @@ public final class AssistantStore: ObservableObject {
     func createAssistant(name: String, description: String, instructions: String, codeInterpreter: Bool, fileSearch: Bool, functions: [FunctionDeclaration], fileIds: [String]? = nil) async -> String? {
         do {
             let toolResources: ToolResources? = if let fileIds {
-                ToolResources(fileSearch: nil, codeInterpreter: .init(fileIds: fileIds))
+                if codeInterpreter {
+                    ToolResources(fileSearch: nil, codeInterpreter: .init(fileIds: fileIds))
+                } else if fileSearch {
+                    ToolResources(fileSearch: .init(vectorStores: [VectorStoreQuery(fileIDs: fileIds)]), codeInterpreter: nil)
+                } else {
+                    nil
+                }
             } else {
                 nil
             }
@@ -56,7 +62,13 @@ public final class AssistantStore: ObservableObject {
     func modifyAssistant(asstId: String, name: String, description: String, instructions: String, codeInterpreter: Bool, fileSearch: Bool, functions: [FunctionDeclaration], fileIds: [String]? = nil) async -> String? {
         do {
             let toolResources: ToolResources? = if let fileIds {
-                ToolResources(fileSearch: nil, codeInterpreter: .init(fileIds: fileIds))
+                if codeInterpreter {
+                    ToolResources(fileSearch: nil, codeInterpreter: .init(fileIds: fileIds))
+                } else if fileSearch {
+                    ToolResources(fileSearch: .init(vectorStores: [VectorStoreQuery(fileIDs: fileIds)]), codeInterpreter: nil)
+                } else {
+                    nil
+                }
             } else {
                 nil
             }
@@ -93,7 +105,15 @@ public final class AssistantStore: ObservableObject {
                         return nil
                     }
                 }
-                let fileIds = result.toolResources?.codeInterpreter?.fileIds ?? []
+                let fileIds: [String] = {
+                    if codeInterpreter {
+                        result.toolResources?.codeInterpreter?.fileIds ?? []
+                    } else if fileSearch {
+                        result.toolResources?.fileSearch?.vectorStores?.first?.fileIDs ?? []
+                    } else {
+                        []
+                    }
+                }()
 
                 assistants.append(Assistant(id: result.id, name: result.name ?? "", description: result.description, instructions: result.instructions, codeInterpreter: codeInterpreter, fileSearch: fileSearch, fileIds: fileIds, functions: functions))
             }
@@ -142,5 +162,16 @@ public final class AssistantStore: ObservableObject {
             tools.append(.fileSearch)
         }
         return tools + functions.map { .function($0) }
+    }
+
+    func createVectorStore(fileIds: [String]) async -> VectorStoreResult? {
+        do {
+            let result = try await openAIClient.vectorStore(query: VectorStoreQuery(fileIDs: fileIds))
+            return result
+        }
+        catch {
+            print("error = \(error)")
+            return nil
+        }
     }
 }

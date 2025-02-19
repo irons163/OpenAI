@@ -40,16 +40,31 @@ public struct RunResult: Codable, Equatable {
         public let type: String
         public let function: ChatFunctionCall
     }
-    
+
+    public struct Tool: Codable, Equatable {
+        public let type: String
+        public let function: ChatQuery.ChatCompletionToolParam.FunctionDefinition?
+
+        enum CodingKeys: String, CodingKey {
+            case type
+            case function
+        }
+    }
+
     enum CodingKeys: String, CodingKey {
         case id
         case threadId = "thread_id"
+        case assistantId = "assistant_id"
         case status
         case requiredAction = "required_action"
+        case tools
     }
 
     public let id: String
     public let threadId: String
+    public let assistantId: String
     public let status: Status
     public let requiredAction: RequiredAction?
+
+    public let tools: [Tool]?
 }

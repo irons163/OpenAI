@@ -36,4 +36,6 @@ public protocol OpenAIAsync {
     func threadsMessages(threadId: String, before: String?) async throws -> ThreadsMessagesResult
     func threadsAddMessage(threadId: String, query: MessageQuery) async throws -> ThreadAddMessageResult
     func files(query: FilesQuery) async throws -> FilesResult
+    func file(fileId: String) async throws -> FilesResult
+    func vectorStore(query: VectorStoreQuery) async throws -> VectorStoreResult
 }

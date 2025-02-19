@@ -11,10 +11,12 @@ public struct RunRetrieveStepsResult: Codable, Equatable {
     
     public struct StepDetailsTopLevel: Codable, Equatable {
         public let id: String
+        public let assistantId: String
         public let stepDetails: StepDetailsSecondLevel
 
         enum CodingKeys: String, CodingKey {
             case id
+            case assistantId = "assistant_id"
             case stepDetails = "step_details"
         }
 

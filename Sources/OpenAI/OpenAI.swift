@@ -330,7 +330,8 @@ extension APIPath {
         }
         static let threadsMessages = Assistants(stringValue: "/v1/threads/THREAD_ID/messages")
         static let files = Assistants(stringValue: "/v1/files")
-        
+        static let vectorStores = Assistants(stringValue: "/v1/vector_stores")
+
         let stringValue: String
     }
 

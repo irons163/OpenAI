@@ -181,7 +181,19 @@ extension OpenAI: OpenAIAsync {
             request: makeFilesRequest(query: query)
         )
     }
-    
+
+    public func file(fileId: String) async throws -> FilesResult {
+        try await performRequestAsync(
+            request: makeFileRequest(fileId)
+        )
+    }
+
+    public func vectorStore(query: VectorStoreQuery) async throws -> VectorStoreResult {
+        try await performRequestAsync(
+            request: makeVectorStoreCreateRequest(query: query)
+        )
+    }
+
     func performRequestAsync<ResultType: Codable>(request: any URLRequestBuildable) async throws -> ResultType {
         let urlRequest = try request.build(token: configuration.token,
                                         organizationIdentifier: configuration.organizationIdentifier,

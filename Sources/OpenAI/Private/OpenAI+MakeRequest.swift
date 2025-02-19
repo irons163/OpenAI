@@ -153,4 +153,15 @@ extension OpenAI {
             body: query
         )
     }
+
+    func makeFileRequest(_ fileId: String) -> JSONRequest<FilesResult> {
+        .init(url: buildURL(path: .Assistants.files.stringValue.withPath(fileId)), method: "GET")
+    }
+
+    func makeVectorStoreCreateRequest(query: VectorStoreQuery) -> AssistantsRequest<VectorStoreResult> {
+        .jsonRequest(
+            urlBuilder: DefaultURLBuilder(configuration: configuration, path: .Assistants.vectorStores.stringValue),
+            body: query
+        )
+    }
 }
