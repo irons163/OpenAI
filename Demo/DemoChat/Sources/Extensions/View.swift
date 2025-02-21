@@ -49,7 +49,6 @@ extension View {
                             Text(model)
                         }
                     }
-
                     Button("Cancel", role: .cancel) {
                         showsModelSelectionSheet.wrappedValue = false
                     }

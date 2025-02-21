@@ -38,7 +38,7 @@ public struct TextToSpeechView: View {
                     Spacer()
                     ZStack(alignment: .topTrailing) {
                         TextEditor(text: $prompt)
-                            .scrollContentBackground(.hidden)
+//                            .scrollContentBackground(.hidden)
                             .multilineTextAlignment(.trailing)
                         if prompt.isEmpty {
                             Text("...input")
@@ -133,7 +133,7 @@ public struct TextToSpeechView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .scrollDismissesKeyboard(.interactively)
+//        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Create Speech", selectedModel: $selectedSpeechModel)
     }
 }

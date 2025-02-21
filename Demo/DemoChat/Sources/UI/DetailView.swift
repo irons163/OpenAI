@@ -45,96 +45,91 @@ struct DetailView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollViewReader { scrollViewProxy in
-                VStack {
-                    List {
-                        ForEach(conversation.messages) { message in
-                            ChatBubble(message: message)
+        if #available(iOS 16.0, *) {
+            NavigationStack {
+                ScrollViewReader { scrollViewProxy in
+                    VStack {
+                        List {
+                            ForEach(conversation.messages) { message in
+                                ChatBubble(message: message)
+                            }
+                            .listRowSeparator(.hidden)
                         }
-                        .listRowSeparator(.hidden)
-                    }
-                    // Tapping on the message bubble area should dismiss the keyboard.
-                    .onTapGesture {
-                        self.hideKeyboard()
-                    }
-                    .listStyle(.plain)
-                    .animation(.default, value: conversation.messages)
-//                    .onChange(of: conversation) { newValue in
-//                        if let lastMessage = newValue.messages.last {
-//                            scrollViewProxy.scrollTo(lastMessage.id, anchor: .bottom)
-//                        }
-//                    }
+                        // Tapping on the message bubble area should dismiss the keyboard.
+                        .onTapGesture {
+                            self.hideKeyboard()
+                        }
+                        .listStyle(.plain)
+                        .animation(.default, value: conversation.messages)
 
-                    if let error = error {
-                        errorMessage(error: error)
-                    }
+                        if let error = error {
+                            errorMessage(error: error)
+                        }
 
-                    inputBar(scrollViewProxy: scrollViewProxy)
-                }
-                .navigationTitle(conversation.type == .assistant ? "Assistant: \(currentAssistantName())" : "Chat")
-                .safeAreaInset(edge: .top) {
-                    HStack {
-                        Text(
-                            "Model: \(conversation.type == .assistant ? Model.gpt4_o_mini : selectedChatModel)"
-                        )
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        Spacer()
+                        inputBar(scrollViewProxy: scrollViewProxy)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                }
-                .toolbar {
-                    if conversation.type == .assistant {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-
-                            Menu {
-                                ForEach(availableAssistants, id: \.self) { item in
-                                    Button(item.name) {
-                                        print("Select assistant")
-                                        //selectedItem = item
+                    .navigationTitle(conversation.type == .assistant ? "Assistant: \(currentAssistantName())" : "Chat")
+                    .safeAreaInset(edge: .top) {
+                        HStack {
+                            Text(
+                                "Model: \(conversation.type == .assistant ? Model.gpt4_o_mini : selectedChatModel)"
+                            )
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                    }
+                    .toolbar {
+                        if conversation.type == .assistant {
+                            ToolbarItem(placement: .navigationBarTrailing) {
+                                Menu {
+                                    ForEach(availableAssistants, id: \.self) { item in
+                                        Button(item.name) {
+                                            print("Select assistant")
+                                            //selectedItem = item
+                                        }
                                     }
+                                } label: {
+                                    Image(systemName: "eyeglasses")
                                 }
-                            } label: {
-                                Image(systemName: "eyeglasses")
+                            }
+                        }
+                        if conversation.type == .normal {
+                            ToolbarItem(placement: .navigationBarTrailing) {
+                                Button(action: {
+                                    showsModelSelectionSheet.toggle()
+                                }) {
+                                    Image(systemName: "cpu")
+                                }
                             }
                         }
                     }
-                    if conversation.type == .normal {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button(action: {
-                                showsModelSelectionSheet.toggle()
-                            }) {
-                                Image(systemName: "cpu")
+                    .confirmationDialog(
+                        "Select model",
+                        isPresented: $showsModelSelectionSheet,
+                        titleVisibility: .visible,
+                        actions: {
+                            ForEach(DetailView.availableChatModels, id: \.self) { model in
+                                Button {
+                                    selectedChatModel = model
+                                } label: {
+                                    Text(model)
+                                }
                             }
+                            Button("Cancel", role: .cancel) {
+                                showsModelSelectionSheet = false
+                            }
+                        },
+                        message: {
+                            Text(
+                                "View https://platform.openai.com/docs/models/overview for details"
+                            )
+                            .font(.caption)
                         }
-                    }
+                    )
                 }
-                .confirmationDialog(
-                    "Select model",
-                    isPresented: $showsModelSelectionSheet,
-                    titleVisibility: .visible,
-                    actions: {
-                        ForEach(DetailView.availableChatModels, id: \.self) { model in
-                            Button {
-                                selectedChatModel = model
-                            } label: {
-                                Text(model)
-                            }
-                        }
-
-                        Button("Cancel", role: .cancel) {
-                            showsModelSelectionSheet = false
-                        }
-                    },
-                    message: {
-                        Text(
-                            "View https://platform.openai.com/docs/models/overview for details"
-                        )
-                        .font(.caption)
-                    }
-                )
             }
         }
     }

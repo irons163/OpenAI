@@ -15,7 +15,7 @@ public struct ImageView: View {
     }
     
     public var body: some View {
-        NavigationStack {
+        NavigationView {
             List {
                 NavigationLink("Create Image", destination: ImageCreationView(store: store))
                 NavigationLink("Create Image Edit", destination: ImageEditView(store: store))
@@ -27,6 +27,7 @@ public struct ImageView: View {
             .listStyle(.insetGrouped)
             .navigationTitle("Image")
         }
+        .navigationViewStyle(StackNavigationViewStyle())
     }
 }
 

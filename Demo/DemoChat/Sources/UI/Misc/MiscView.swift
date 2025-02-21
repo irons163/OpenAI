@@ -15,21 +15,23 @@ public struct MiscView: View {
     }
     
     public var body: some View {
-        NavigationStack {
-            List {
-                Section(header: Text("Models")) {
-                    NavigationLink("List Models", destination: ListModelsView(store: store))
-                    NavigationLink("Retrieve Model", destination: RetrieveModelView())
+        if #available(iOS 16.0, *) {
+            NavigationStack {
+                List {
+                    Section(header: Text("Models")) {
+                        NavigationLink("List Models", destination: ListModelsView(store: store))
+                        NavigationLink("Retrieve Model", destination: RetrieveModelView())
+                    }
+                    Section(header: Text("Moderations")) {
+                        NavigationLink("Moderation Chat", destination: ModerationChatView(store: store))
+                    }
+                    Section(header: Text("Audio")) {
+                        NavigationLink("Create Speech", destination: TextToSpeechView(store: SpeechStore(openAIClient: store.openAIClient)))
+                    }
                 }
-                Section(header: Text("Moderations")) {
-                    NavigationLink("Moderation Chat", destination: ModerationChatView(store: store))
-                }
-                Section(header: Text("Audio")) {
-                    NavigationLink("Create Speech", destination: TextToSpeechView(store: SpeechStore(openAIClient: store.openAIClient)))
-                }
+                .listStyle(.insetGrouped)
+                .navigationTitle("Misc")
             }
-            .listStyle(.insetGrouped)
-            .navigationTitle("Misc")
         }
     }
 }

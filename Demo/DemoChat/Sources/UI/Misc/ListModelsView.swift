@@ -11,15 +11,17 @@ public struct ListModelsView: View {
     @ObservedObject var store: MiscStore
     
     public var body: some View {
-        NavigationStack {
-            List($store.availableModels.wrappedValue, id: \.id) { row in
-                Text(row.id)
+        if #available(iOS 16.0, *) {
+            NavigationStack {
+                List($store.availableModels.wrappedValue, id: \.id) { row in
+                    Text(row.id)
+                }
+                .listStyle(.insetGrouped)
+                .navigationTitle("Models")
             }
-            .listStyle(.insetGrouped)
-            .navigationTitle("Models")
-        }
-        .task {
-            await store.getModels()
+            .task {
+                await store.getModels()
+            }
         }
     }
 }

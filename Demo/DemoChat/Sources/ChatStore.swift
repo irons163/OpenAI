@@ -26,6 +26,7 @@ public final class ChatStore: ObservableObject {
     private var currentConversationId: String?
 
     @Published var isSendingMessage = false
+    @Published public var productIds: [String] = []
 
     var selectedConversation: Conversation? {
         selectedConversationID.flatMap { id in
@@ -52,7 +53,13 @@ public final class ChatStore: ObservableObject {
         print("deinit")
     }
 
+    public func createAssistantConversation(assistantId: String) {
+        let conversation = Conversation(id: idProvider(), messages: [], type: .assistant, assistantId: assistantId)
+        conversations.append(conversation)
+    }
+
     // MARK: - Events
+
     func createConversation(type: ConversationType = .normal, assistantId: String? = nil) {
         let conversation = Conversation(id: idProvider(), messages: [], type: type, assistantId: assistantId)
         conversations.append(conversation)
@@ -276,7 +283,6 @@ public final class ChatStore: ObservableObject {
             // TESTING RETRIEVAL OF RUN STEPS
             let assistantId = try await handleRunRetrieveSteps()
             if let assistantId {
-//                handleCompleted()
                 try await forceHandleAction(assistantId: assistantId, conversationId: conversationId, threadId: threadId)
             }
 
@@ -290,7 +296,9 @@ public final class ChatStore: ObservableObject {
                     self.stopPolling(conversationId: conversationId, runId: runId, threadId: threadId)
                 }
             case .requiresAction:
-                try await handleRequiresAction(result)
+                // FIXME: Workaround, avoid endless loop.
+                // try await handleRequiresAction(result)
+                handleCompleted(conversationId: conversationId, runId: runId, threadId: threadId)
             default:
                 // Handle additional statuses "requires_action", "queued" ?, "expired", "cancelled"
                 // https://platform.openai.com/docs/assistants/how-it-works/runs-and-run-steps
@@ -382,7 +390,7 @@ public final class ChatStore: ObservableObject {
 
         let weatherFunction = ChatQuery.ChatCompletionToolParam(function: .init(
             name: "find_files",
-            description: "Find uploaded files that match the given criteria, sorted by relevance.",
+            description: "Find uploaded files that match the given criteria, return the files ids(start with specific prefix `file-`), sorted by relevance.",
             parameters: .init(
                 type: .object,
                 properties: [
@@ -423,9 +431,6 @@ public final class ChatStore: ObservableObject {
             )
 
             await addOrUpdateRunStepMessage(runStepMessage)
-
-            // Just return a generic "Done" output for now
-//            toolOutputs.append(.init(toolCallId: toolCall.id, output: "Done"))
         }
 
         switch runsResult.status {
@@ -444,9 +449,6 @@ public final class ChatStore: ObservableObject {
             // https://platform.openai.com/docs/assistants/how-it-works/runs-and-run-steps
             break
         }
-
-//        let query = RunToolOutputsQuery(toolOutputs: toolOutputs)
-//        _ = try await openAIClient.runSubmitToolOutputs(threadId: currentThreadId, runId: currentRunId, query: query)
     }
 
     // The run retrieval steps are fetched in a separate task. This request is fetched, checking for new run steps, each time the run is fetched.
@@ -493,6 +495,7 @@ public final class ChatStore: ObservableObject {
                     if let fileIDs = request?.fileIDs {
                         print(fileIDs)
 
+                        var filenames: [String] = []
                         for fileID in fileIDs {
                             do {
                                 var fileID = fileID
@@ -500,16 +503,26 @@ public final class ChatStore: ObservableObject {
                                     fileID = "file-" + fileID
                                 }
                                 let file = try await openAIClient.file(fileId: fileID)
+                                guard let filename = file.filename else {
+                                    continue
+                                }
                                 let message = Message(
                                     id: file.id,
                                     role: .assistant,
-                                    content: file.filename ?? "empty",
+                                    content: filename,
                                     createdAt: Date(),
                                     isRunStep: true
                                 )
+                                filenames.append((filename as NSString).deletingPathExtension)
                                 await addOrUpdateRunStepMessage(message)
                             } catch {
                                 continue
+                            }
+                        }
+
+                        if filenames.isEmpty == false {
+                            DispatchQueue.main.async {
+                                self.productIds = filenames
                             }
                         }
                     }

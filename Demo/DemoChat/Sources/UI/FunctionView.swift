@@ -18,35 +18,36 @@ struct FunctionView: View {
     @State var alertMessage = ""
     
     var body: some View {
-        NavigationStack {
-            Form {
-                TextField("Name", text: $name)
-                TextField("Description", text: $description)
-                TextField("Parameters", text: $parameters)
-            }
-            .navigationTitle("Create Function")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
+        if #available(iOS 16.0, *) {
+            NavigationStack {
+                Form {
+                    TextField("Name", text: $name)
+                    TextField("Description", text: $description)
+                    TextField("Parameters", text: $parameters)
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        let parameters = validateParameters()
-                        guard !isShowingAlert else {
-                            return
+                .navigationTitle("Create Function")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            dismiss()
                         }
-                        
-                        function = FunctionDeclaration(name: name, description: description, parameters: parameters)
-                        dismiss()
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") {
+                            let parameters = validateParameters()
+                            guard !isShowingAlert else {
+                                return
+                            }
+                            function = FunctionDeclaration(name: name, description: description, parameters: parameters)
+                            dismiss()
+                        }
                     }
                 }
-            }
-            .alert(isPresented: $isShowingAlert) {
-                Alert(title: Text("Parameters Error"), message: Text(alertMessage))
+                .alert(isPresented: $isShowingAlert) {
+                    Alert(title: Text("Parameters Error"), message: Text(alertMessage))
+                }
             }
         }
     }

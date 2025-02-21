@@ -46,59 +46,61 @@ public struct AssistantsView: View {
 
     public var body: some View {
         ZStack {
-            NavigationSplitView {
-                AssistantsListView(
-                    assistants: $assistantStore.availableAssistants, selectedAssistantId: Binding<String?>(
-                        get: {
-                            assistantStore.selectedAssistantId
+            if #available(iOS 16.0, *) {
+                NavigationSplitView {
+                    AssistantsListView(
+                        assistants: $assistantStore.availableAssistants, selectedAssistantId: Binding<String?>(
+                            get: {
+                                assistantStore.selectedAssistantId
 
-                        }, set: { newId in
-                            guard newId != nil else { return }
+                            }, set: { newId in
+                                guard newId != nil else { return }
 
-                            selectAssistant(newId: newId)
-                        }), onLoadMoreAssistants: {
-                            loadMoreAssistants()
-                        }, isLoadingMore: $isLoadingMore
-                )
-                .toolbar {
-                    ToolbarItemGroup(placement: .primaryAction) {
-                        Button {
-                            mode = .create
-                            isModalPresented = true
-                        } label: {
-                            Label("Create Assistant", systemImage: "plus")
-                        }
-                        Button {
-                            guard let asstId = assistantStore.selectedAssistantId else {
-                                return
+                                selectAssistant(newId: newId)
+                            }), onLoadMoreAssistants: {
+                                loadMoreAssistants()
+                            }, isLoadingMore: $isLoadingMore
+                    )
+                    .toolbar {
+                        ToolbarItemGroup(placement: .primaryAction) {
+                            Button {
+                                mode = .create
+                                isModalPresented = true
+                            } label: {
+                                Label("Create Assistant", systemImage: "plus")
                             }
-                            
-                            // Create new local conversation to represent new thread.
-                            store.createConversation(type: .assistant, assistantId: asstId)
-                        } label: {
-                            Label("Start Chat", systemImage: "plus.message")
-                        }
-                        .disabled(assistantStore.selectedAssistantId == nil)
-                        Button {
-                            Task {
-                                let _ = await assistantStore.getAssistants()
+                            Button {
+                                guard let asstId = assistantStore.selectedAssistantId else {
+                                    return
+                                }
+
+                                // Create new local conversation to represent new thread.
+                                store.createConversation(type: .assistant, assistantId: asstId)
+                            } label: {
+                                Label("Start Chat", systemImage: "plus.message")
                             }
-                        } label: {
-                            Label("Get Assistants", systemImage: "arrow.triangle.2.circlepath")
+                            .disabled(assistantStore.selectedAssistantId == nil)
+                            Button {
+                                Task {
+                                    let _ = await assistantStore.getAssistants()
+                                }
+                            } label: {
+                                Label("Get Assistants", systemImage: "arrow.triangle.2.circlepath")
+                            }
                         }
                     }
+                } detail: {
+                    if assistantStore.selectedAssistantId != nil {
+                        assistantContentView()
+                    } else {
+                        Text("Select an assistant")
+                    }
                 }
-            } detail: {
-                if assistantStore.selectedAssistantId != nil {
+                .sheet(isPresented: $isModalPresented) {
+                    resetAssistantCreator()
+                } content: {
                     assistantContentView()
-                } else {
-                    Text("Select an assistant")
                 }
-            }
-            .sheet(isPresented: $isModalPresented) {
-                resetAssistantCreator()
-            } content: {
-                assistantContentView()
             }
         }
     }

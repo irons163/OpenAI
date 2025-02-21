@@ -16,58 +16,62 @@ public struct ChatView: View {
     @Environment(\.idProviderValue) var idProvider
     
     @State private var sendMessageTask: Task<Void, Never>?
+//    @Binding var productIds: [String]
 
     public init(store: ChatStore, assistantStore: AssistantStore) {
         self.store = store
         self.assistantStore = assistantStore
+//        self._productIds = productIds
     }
 
     public var body: some View {
         ZStack {
-            NavigationSplitView {
-                ListView(
-                    conversations: $store.conversations,
-                    selectedConversationId: Binding<Conversation.ID?>(
-                        get: {
-                            store.selectedConversationID
-                        }, set: { newId in
-                            store.selectConversation(newId)
-                        })
-                )
-                .toolbar {
-                    ToolbarItem(
-                        placement: .primaryAction
-                    ) {
-                        Menu {
-                            Button("Create Chat") {
-                                store.createConversation()
-                            }
-                        } label: {
-                            Image(systemName: "plus")
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                }
-            } detail: {
-                if let conversation = store.selectedConversation {
-                    DetailView(
-                        availableAssistants: assistantStore.availableAssistants, conversation: conversation,
-                        error: store.conversationErrors[conversation.id],
-                        sendMessage: { message, selectedModel in
-                            self.sendMessageTask = Task {
-                                await store.sendMessage(
-                                    Message(
-                                        id: idProvider(),
-                                        role: .user,
-                                        content: message,
-                                        createdAt: dateProvider()
-                                    ),
-                                    conversationId: conversation.id,
-                                    model: selectedModel
-                                )
-                            }
-                        }, isSendingMessage: $store.isSendingMessage
+            if #available(iOS 16.0, *) {
+                NavigationSplitView {
+                    ListView(
+                        conversations: $store.conversations,
+                        selectedConversationId: Binding<Conversation.ID?>(
+                            get: {
+                                store.selectedConversationID
+                            }, set: { newId in
+                                store.selectConversation(newId)
+                            })
                     )
+                    .toolbar {
+                        ToolbarItem(
+                            placement: .primaryAction
+                        ) {
+                            Menu {
+                                Button("Create Chat") {
+                                    store.createConversation()
+                                }
+                            } label: {
+                                Image(systemName: "plus")
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                } detail: {
+                    if let conversation = store.selectedConversation {
+                        DetailView(
+                            availableAssistants: assistantStore.availableAssistants, conversation: conversation,
+                            error: store.conversationErrors[conversation.id],
+                            sendMessage: { message, selectedModel in
+                                self.sendMessageTask = Task {
+                                    await store.sendMessage(
+                                        Message(
+                                            id: idProvider(),
+                                            role: .user,
+                                            content: message,
+                                            createdAt: dateProvider()
+                                        ),
+                                        conversationId: conversation.id,
+                                        model: selectedModel
+                                    )
+                                }
+                            }, isSendingMessage: $store.isSendingMessage
+                        )
+                    }
                 }
             }
         }.onDisappear {

@@ -12,34 +12,34 @@ struct ListView: View {
     @Binding var selectedConversationId: Conversation.ID?
     
     var body: some View {
-        List(
-            $conversations,
-            editActions: [.delete],
-            selection: $selectedConversationId
-        ) { $conversation in
-            if let convoContent = conversation.messages.last?.content {
-                Text(
-                    convoContent
-                )
-                .lineLimit(2)
-            }
-            else {
-                if conversation.type == .assistant {
+        if #available(iOS 16.0, *) {
+            List(
+                $conversations,
+                editActions: [.delete],
+                selection: $selectedConversationId
+            ) { $conversation in
+                if let convoContent = conversation.messages.last?.content {
                     Text(
-                        "New Assistant"
+                        convoContent
                     )
                     .lineLimit(2)
                 }
                 else {
-                    Text(
-                        "New Conversation"
-                    )
-                    .lineLimit(2)
+                    if conversation.type == .assistant {
+                        Text(
+                            "New Assistant"
+                        )
+                        .lineLimit(2)
+                    }
+                    else {
+                        Text(
+                            "New Conversation"
+                        )
+                        .lineLimit(2)
+                    }
                 }
             }
-
-
+            .navigationTitle("Conversations")
         }
-        .navigationTitle("Conversations")
     }
 }

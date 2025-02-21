@@ -5,7 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "DemoChat",
-    platforms: [.macOS(.v13), .iOS(.v16)],
+    platforms: [.macOS(.v13), .iOS(.v15)],
     products: [
         .library(
             name: "DemoChat",
